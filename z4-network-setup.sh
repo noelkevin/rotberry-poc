@@ -52,6 +52,13 @@ PermanentMACAddress=e0:e1:a9:36:4d:7b
 [Link]
 MACAddressPolicy=random
 EOF
+sudo tee /etc/systemd/network/03-mac-wlangear.link <<'EOF'
+[Match]
+PermanentMACAddress=d6:dc:1d:13:c6:e7
+
+[Link]
+MACAddressPolicy=random
+EOF
 
 echo -e "\n [ Rename wifi interfaces ]\n"
 sudo tee /etc/udev/rules.d/70-persistent-net.rules <<'EOF'
@@ -59,10 +66,13 @@ SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0e8d", ATTRS{idProduct}=="796
 SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="0846", ATTRS{idProduct}=="9060" NAME="wlangear"
 EOF
 
-echo -e "\n [ Disable scatter-gather ]\n"
+echo -e "\n [ Disable scatter-gather, btusb conf ]\n"
 sudo tee /etc/modprobe.d/mt76_usb_disablesg.conf <<'EOF'
 options mt76_usb disable_usb_sg=1
 options mt76_usb ps_enable=0
+EOF
+sudo tee /etc/modprobe.d/btusb.conf <<'EOF'
+options btusb reset=N
 EOF
 
 echo -e "\n [ Reload drivers and apply changes ]\n"
@@ -90,11 +100,11 @@ network:
         bond0:
             interfaces:
                 - wlan0
-                - wlancomfast
+                - wlangear
             dhcp4: true
             parameters:
                 mode: active-backup
-                primary: wlancomfast
+                primary: wlangear
     ethernets:
         eth0:
             match:
@@ -114,18 +124,63 @@ sudo yq -y -s '.[0] * .[1]' /tmp/eth-init.yaml /etc/netplan/50-cloud-init.yaml.t
 sudo rm /etc/netplan/50-cloud-init.yaml.tmp
 
 echo -e "\n [ Adjust wifi ]\n"
-sudo yq -y -i '.network.wifis.wlan0 as $x | .network.wifis.wlancomfast = $x ' /etc/netplan/50-cloud-init.yaml
+sudo yq -y -i '.network.wifis.wlan0 as $x | .network.wifis.wlangear = $x ' /etc/netplan/50-cloud-init.yaml
 #sudo yq -y -i 'del(.network.wifis.wlan0)' /etc/netplan/50-cloud-init.yaml
 sudo cat /etc/netplan/50-cloud-init.yaml
 
 echo -e "\n [ Apply Netplan ]\n"
 sudo netplan apply; sudo systemctl restart avahi-daemon
+cat /proc/net/bonding/bond0
 
 echo -e "\n [ Enable avahi reflection ]\n"
 sudo sed -r -i 's/#?enable-reflector=no/enable-reflector=yes/g' /etc/avahi/avahi-daemon.conf
-sudo sed -r -i 's/#?allow-interfaces.*/allow-interfaces=bond0,wlan0,usb0,eth0,wlancomfast,ap0/g' /etc/avahi/avahi-daemon.conf
+sudo sed -r -i 's/#?allow-interfaces.*/allow-interfaces=bond0,wlan0,usb0,eth0,wlancomfast,wlangear,ap0/g' /etc/avahi/avahi-daemon.conf
 sudo systemctl enable avahi-daemon.service
 sudo systemctl restart avahi-daemon.service
+
+echo -e "\n [ Put led to show bond0 status ]\n"
+sudo tee /usr/local/bin/check_bond0.sh <<'EOF'
+#!/bin/bash
+RLED_PATH="/sys/class/leds/PWR/brightness"
+GLED_PATH="/sys/class/leds/ACT/brightness"
+RLED_TRIG="/sys/class/leds/PWR/trigger"
+GLED_TRIG="/sys/class/leds/ACT/trigger"
+while true; do
+    if ip link show bond0 | grep -q "state UP"; then
+     if (iw dev wlangear link | grep -q "Connected" || iw dev wlancomfast link | grep -q "Connected"); then
+            echo none > "$RLED_TRIG"
+            sleep 15
+        else
+                for i in $(seq 1 40);
+                do
+                    echo 1 > "$RLED_PATH";sleep 0.05;echo 0 > "$RLED_PATH";sleep 0.05;
+                    echo 1 > "$RLED_PATH";sleep 0.05;echo 0 > "$RLED_PATH";sleep 0.05;
+                    echo 1 > "$RLED_PATH";sleep 0.05;echo 0 > "$RLED_PATH";sleep 0.5;
+                done
+     fi
+    else
+            echo heartbeat > "$RLED_TRIG"
+            sleep 15
+    fi
+done
+EOF
+sudo tee /etc/systemd/system/check_bond0.service <<'EOF'
+[Unit]
+Description=Check bond0 Interface and Control LED
+
+[Service]
+ExecStart=/usr/local/bin/check_bond0.sh
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable check_bond0.service
+sudo systemctl restart check_bond0.service
+
+
 
 
 ###############################################

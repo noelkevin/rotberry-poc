@@ -68,6 +68,7 @@ echo -e "\n [ Create mount folders ]\n"
 sudo mkdir -p /media/romediadisk
 sudo mkdir -p /media/rwmediadisk
 sudo mkdir -p /mnt/jeyi
+sudo mkdir -p /mnt/hagibis
 sudo mkdir -p /media/jeyi
 sudo mkdir -p /mnt/team
 sudo mkdir -p /mnt/wdsn
@@ -88,6 +89,8 @@ grep -q team /etc/fstab.tmp || echo 'UUID=e90d74eb-d5e2-457e-acdf-5f4fb4e51797 \
 sudo sed -i 's/^.*team.*$/UUID=e90d74eb-d5e2-457e-acdf-5f4fb4e51797 \/mnt\/team ext4 auto,rw,nofail,defaults,discard,noatime  0 0/' /etc/fstab.tmp
 grep -q wdsn /etc/fstab.tmp || echo 'UUID=cafe67cc-ad56-470b-b5d8-51e509906f93 \/mnt\/wdsn ext4 auto,rw,nofail,defaults,noatime 0 0' | sudo tee -a /etc/fstab.tmp
 sudo sed -i 's/^.*wdsn.*$/UUID=cafe67cc-ad56-470b-b5d8-51e509906f93 \/mnt\/wdsn ext4 auto,rw,nofail,defaults,noatime  0 0/' /etc/fstab.tmp
+grep -q hagibis /etc/fstab.tmp || echo 'UUID=6724-7EB8 \/mnt\/hagibis exfat auto,rw,nofail,defaults,uid=1000,gid=1003,noatime  0 0' | sudo tee -a /etc/fstab.tmp
+sudo sed -i 's/^.*hagibis.*$/UUID=6724-7EB8 \/mnt\/hagibis exfat auto,rw,user,nofail,defaults,uid=1000,gid=1003,noatime  0 0/' /etc/fstab.tmp
 sudo mv -f /etc/fstab.tmp /etc/fstab
 sudo systemctl daemon-reload
 sudo mount -a
@@ -150,7 +153,7 @@ grep -q hdmi_blanking=1 /boot/firmware/config.txt || echo 'hdmi_blanking=1' | su
 grep -q dtoverlay=disable-bt /boot/firmware/config.txt || echo 'dtoverlay=disable-bt' | sudo tee -a /boot/firmware/config.txt
 grep -q dtparam=eth_led0 /boot/firmware/config.txt || echo 'dtparam=eth_led0=4' | sudo tee -a /boot/firmware/config.txt
 grep -q dtparam=eth_led1 /boot/firmware/config.txt || echo 'dtparam=eth_led1=4' | sudo tee -a /boot/firmware/config.txt
-grep -q dtparam=pwr_led_trigger /boot/firmware/config.txt || echo 'dtparam=pwr_led_trigger=none' | sudo tee -a /boot/firmware/config.txt
+grep -q dtparam=pwr_led_trigger /boot/firmware/config.txt || echo 'dtparam=pwr_led_trigger=default-on' | sudo tee -a /boot/firmware/config.txt
 grep -q max_usb_current=1 /boot/firmware/config.txt || echo 'max_usb_current=1' | sudo tee -a /boot/firmware/config.txt
 grep -q 'blacklist btusb' /etc/modprobe.d/blacklist.conf || echo 'blacklist btusb' | sudo tee -a /etc/modprobe.d/blacklist.conf
 cat /boot/firmware/config.txt
